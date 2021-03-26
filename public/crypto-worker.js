@@ -4,25 +4,32 @@ self.window = self // This is required for the jsencrypt library to work within 
 self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/jsencrypt/2.3.1/jsencrypt.min.js');
 self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.0.0/crypto-js.min.js');
 self.importScripts('crypto.js')
+self.importScripts('futoin-hkdf.js')
+self.importScripts('aes-js.js')
+
 
 let crypt = null
 let privateKey = null
 let ss = null
 const crypto = require('crypto')
+const hkdf = require('futoin-hkdf')
+const aesjs = require('aes-js');
+
+
 
 /** Webworker onmessage listener */
 onmessage = function(e) {
-  const [ messageType, messageId, text, key ] = e.data
+  const [ messageType, messageId, text, key, IV ] = e.data
   let result
   switch (messageType) {
     case 'generate-keys':
       result = generateKeypair()
       break
     case 'encrypt':
-      result = encrypt(text, key)
+      result = encrypt(text, key, IV)
       break
     case 'decrypt':
-      result = decrypt(text)
+      result = decrypt(text, key , IV)
       break
 	case 'hmac':
 	  result = generateHash(text)
@@ -35,6 +42,18 @@ onmessage = function(e) {
 	  break
 	case 'sharedSecret':
 	  result = sharedSecret(key)
+	  break  
+	case 'keyDerive':
+	  result = keyDerive()
+	  break
+	case 'generateIV':
+	  result = generateIV()
+	  break
+	case 'bytesToStr':
+	  result = bytesToStr(text)
+	  break
+	case 'strToBytes':
+	  result = strToBytes(text)
 	  break  
   }
 
@@ -56,18 +75,47 @@ function generateKeypair () {
 }
 
 /** Encrypt the provided string with the destination public key */
-function encrypt (content, publicKey) {
-  crypt.setKey(publicKey)
-  return crypt.encrypt(content)
+function encrypt (content, derivedKey, IV) {
+  // Convert text to bytes
+  //var key = [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 ];
+
+// The initialization vector (must be 16 bytes)
+  //var iv = [ 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34,35, 36 ];
+  var textBytes = aesjs.utils.utf8.toBytes(content);
+  var aesOfb = new aesjs.ModeOfOperation.ofb(derivedKey, IV);
+  var encryptedBytes = aesOfb.encrypt(textBytes);
+  var encryptedHex = aesjs.utils.hex.fromBytes(encryptedBytes);
+  return encryptedHex
+  
 }
 
 /** Decrypt the provided string with the local private key */
-function decrypt (content) {
-  crypt.setKey(privateKey)
-  return crypt.decrypt(content)
+function decrypt (content, derivedKey, IV) {
+  var encryptedBytes = aesjs.utils.hex.toBytes(content);
+  var aesOfb = new aesjs.ModeOfOperation.ofb(derivedKey, IV);
+  var decryptedBytes = aesOfb.decrypt(encryptedBytes);
+  var decryptedText = aesjs.utils.utf8.fromBytes(decryptedBytes);
+  return decryptedText
 }
 
 //----------------------------------untested---------------
+//HKDF
+function keyDerive(){
+	const ikm = ss;
+	const length = 32;
+	const salt = crypto.randomBytes(32);
+	const info = '';
+	const hash = 'SHA-256';
+	//console.log(hkdf.extract('ripemd160', 128, ikm, salt)); 
+	//return hkdf(ikm, length, salt, info, hash);
+	const extract = hkdf.extract('ripemd160', 32, ikm, salt);
+	return(hkdf.expand('SHA256', 256, extract, 32, info)); // run only step #2
+}
+
+function generateIV(){
+	return crypto.randomBytes(16)
+}
+
 function signingdata(text){
   const hash = createHash('sha256',privateKey).update(text).digest('hex')
   return hash
@@ -123,3 +171,11 @@ function Export(){
   });
 }
 //----------------------------------untested---------------
+
+function bytesToStr(content){
+	return aesjs.utils.hex.fromBytes(content);
+}
+
+function strToBytes(content){
+	return aesjs.utils.hex.toBytes(content);
+}

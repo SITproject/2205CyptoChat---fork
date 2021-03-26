@@ -47,17 +47,21 @@ const vm = new Vue ({
         // Only decrypt messages that were encrypted with the user's public key
 
         if (message.recipient === this.originPublicKey) {
-		  //Hash the message
+		  //Parse key and IV buffer
+		  const keys = await this.getWebWorkerResponse('strToBytes', message.derivedKey)
+		  const IV = await this.getWebWorkerResponse('strToBytes', message.IV)
+
 		  // Decrypt the message text in the webworker thread
-		  message.text = await this.getWebWorkerResponse('decrypt', message.text)
-		  const hash = await this.getWebWorkerResponse('hmac', message.text)
-		  console.log(message)
-		  if(hash == message.hashValue){
-		    this.messages.push(message)
-		  }
-		  else{
-		    this.addNotification(`Message could be modified, Hash value ${message.hashValue} seems to be different`)
-		  }
+		  message.text = await this.getWebWorkerResponse('decrypt', [message.text, keys, IV])
+		  this.messages.push(message)
+		  
+		  //const hash = await this.getWebWorkerResponse('hmac', message.text)
+		  //if(hash == message.hashValue){
+		  //  this.messages.push(message)
+		  //}
+		  //else{
+		  //  this.addNotification(`Message could be modified, Hash value ${message.hashValue} seems to be different`)
+		  //}
         }
       })
 
@@ -115,6 +119,8 @@ const vm = new Vue ({
         recipient: this.destinationPublicKey,
         sender: this.originPublicKey,
 		hashValue: null,
+		derivedKey: null,
+		IV: null
       })
 
       // Reset the UI input draft text
@@ -124,17 +130,30 @@ const vm = new Vue ({
       this.addMessage(message.toObject())
 
       if (this.destinationPublicKey) {
-		
+		//get 32 bytes key for encryption
+		const derivedKey = await this.getWebWorkerResponse(
+          'keyDerive', [ null, null ])
+		//get 16 bytes IV for encryption
+		const IV = await this.getWebWorkerResponse(
+          'generateIV', [ null, null ])		
+		console.log(derivedKey)
+		const hexKeys = await this.getWebWorkerResponse(
+          'bytesToStr', [ derivedKey ])
+		const hexIV = await this.getWebWorkerResponse(
+          'bytesToStr', [ IV ])  
+
         // Encrypt message with the public key of the other user
         const encryptedText = await this.getWebWorkerResponse(
-          'encrypt', [ message.get('text'), this.destinationPublicKey ])
-		 
-		//Hash the message
-		const hash = await this.getWebWorkerResponse('hmac', [message.get('text')])
-		
-        const encryptedMsg = message.set('text', encryptedText).set('hashValue', hash)
+          'encrypt', [ message.get('text'), derivedKey, IV ])
 
+		
+		const encryptedMsg = message.set('text', encryptedText).set('derivedKey', hexKeys).set('IV', hexIV)
 		console.log(encryptedMsg.toObject())
+		//Hash the message
+		//const hash = await this.getWebWorkerResponse('hmac', [message.get('text')])
+		
+        //const encryptedMsg = message.set('text', encryptedText).set('hashValue', hash)
+
         // Emit the encrypted message
         this.socket.emit('MESSAGE', encryptedMsg.toObject())
       }
