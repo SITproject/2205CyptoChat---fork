@@ -23,7 +23,7 @@ const vm = new Vue ({
 
     // Generate keypair and join default room
     this.originPublicKey = await this.getWebWorkerResponse('generate-keys')
-    this.addNotification(`Keypair Generated - ${this.originPublicKey}`)
+    this.addNotification(`Keypair Generated - ${this.getKeySnippet(this.originPublicKey)}`)
 
     // Initialize socketio
     this.socket = io()
@@ -158,7 +158,7 @@ const vm = new Vue ({
         this.socket.emit('MESSAGE', encryptedMsg.toObject())
       }
     },
-//this.SharedSecret = await this.getWebWorkerResponse('sharedSecret', [null, this.destinationPublicKey])
+
     /** Join the specified chatroom */
     joinRoom () {
       if (this.pendingRoom !== this.currentRoom && this.originPublicKey) {
@@ -220,7 +220,7 @@ const vm = new Vue ({
 	
     /** Get key snippet for display purposes */
     getKeySnippet (key) {
-      return key.slice(400, 416)
+      return key.slice(10, 16)
     },
 
     /** Autoscoll DOM element to bottom */
