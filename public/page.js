@@ -51,7 +51,13 @@ const vm = new Vue ({
 		  const symmetricKey = await this.getWebWorkerResponse('PKIDecrypt', [message.derivedKey])
 		  const decryptedIV = await this.getWebWorkerResponse('PKIDecrypt', [message.IV])
 		  const decryptedHash = await this.getWebWorkerResponse('PKIDecrypt', [message.hashValue])
-
+		  
+		  //Decrypt Signatures
+		  const decryptedSignText = await this.getWebWorkerResponse('PKIDecrypt', [message.Sign.EncryptedSignHash])
+		  const decryptedSignHash = await this.getWebWorkerResponse('PKIDecrypt', [message.Sign.EncryptedSignHash])
+		  const decryptedSignIV = await this.getWebWorkerResponse('PKIDecrypt', [message.Sign.EncryptedSignHash])
+		  const decryptedSignKey = await this.getWebWorkerResponse('PKIDecrypt', [message.Sign.EncryptedSignHash])
+		  
 		  //Hash String
 		  const hashString = await this.getWebWorkerResponse(
             'bytesToStr', [ decryptedHash ])  
@@ -66,8 +72,9 @@ const vm = new Vue ({
 		  
 		  //calculate Hash of message
 		  const hash = await this.getWebWorkerResponse('hmac', [hashKey, message.text])
-
-		  if(hash == hashString){
+		  const hashed = await this.getWebWorkerResponse('bytesToStr', [hash])
+		  
+		  if(hashed == hashString){
 		    this.messages.push(message)
 		  }
 		  else{
@@ -130,7 +137,8 @@ const vm = new Vue ({
         sender: this.originPublicKey,
 		hashValue: null,
 		derivedKey: null,
-		IV: null
+		IV: null,
+		Sign: null
       })
 
       // Reset the UI input draft text
@@ -140,40 +148,57 @@ const vm = new Vue ({
       this.addMessage(message.toObject())
 
       if (this.destinationPublicKey) {
+		  
+		  /*Step 1 Generate Keys */
 		//get 32 bytes key for encryption
 		const derivedKey = await this.getWebWorkerResponse(
           'keyDerive', [ "encryption" ])
 		//get 16 bytes IV for encryption
 		const IV = await this.getWebWorkerResponse(
           'generateIV', [ "encryption" ])		
-
 		//get 32 bytes key for hashing
 		const hashKey = await this.getWebWorkerResponse(
           'keyDerive', [ "hashKey" ])
-		
-		//Hash the message
-		const hash = await this.getWebWorkerResponse('hmac', [hashKey, message.get('text')])
-		
-		//Hex the Encryption keys
-		const hexKeys = await this.getWebWorkerResponse(
-          'bytesToStr', [ derivedKey ])
-		const hexIV = await this.getWebWorkerResponse(
-          'bytesToStr', [ IV ])   
-		
-		
-        // Encrypt message with the public key of the other user
-        const encryptedText = await this.getWebWorkerResponse(
-          'encrypt', [ message.get('text'), derivedKey, IV ])
 		  
-		//Encrypt Key and IV with PKI
-        const EncryptedKey = await this.getWebWorkerResponse(
-          'PKIEncrypt', [ hexKeys, this.destinationPublicKey ])	
-        const EncryptedIV = await this.getWebWorkerResponse(
-          'PKIEncrypt', [ hexIV, this.destinationPublicKey ])	
-		const EncryptedHash = await this.getWebWorkerResponse(
-          'PKIEncrypt', [ hash, this.destinationPublicKey ])		  
+		const hash = await this.getWebWorkerResponse('hmac', [hashKey, message.get('text')])		//Hash the message
+
+		//convert Bytes to string the keys   
 		
-		const encryptedMsg = message.set('text', encryptedText).set('derivedKey', EncryptedKey).set('IV', EncryptedIV).set('hashValue', EncryptedHash)
+		
+		//Signature
+		const SignText = await this.getWebWorkerResponse(
+          'sign', [ message.get('text')])
+		const SignHash = await this.getWebWorkerResponse(
+          'sign', [ hash ])
+		const SignKey = await this.getWebWorkerResponse(
+          'sign', [ derivedKey])
+		const SignIV = await this.getWebWorkerResponse(
+          'sign', [ IV ])		  
+		
+		
+		// Symmetric AES OFB
+        const encryptedText = await this.getWebWorkerResponse(
+          'encrypt', [ message.get('text'), derivedKey, IV ])  
+		/*Asymmetric*/
+        const EncryptedKey = await this.getWebWorkerResponse(
+          'PKIEncrypt', [ derivedKey, this.destinationPublicKey ])	
+        const EncryptedIV = await this.getWebWorkerResponse(
+          'PKIEncrypt', [ IV, this.destinationPublicKey ])	
+		const EncryptedHash = await this.getWebWorkerResponse(
+          'PKIEncrypt', [ hash, this.destinationPublicKey ])
+		  
+		//Encrypt Signatures
+		const EncryptedSignText = await this.getWebWorkerResponse(
+          'PKIEncrypt', [ SignText, this.destinationPublicKey ])  
+		const EncryptedSignHash = await this.getWebWorkerResponse(
+          'PKIEncrypt', [ SignHash, this.destinationPublicKey ]) 
+		const EncryptedSignKey = await this.getWebWorkerResponse(
+          'PKIEncrypt', [ SignKey, this.destinationPublicKey ]) 
+		const EncryptedSignIV = await this.getWebWorkerResponse(
+          'PKIEncrypt', [SignIV, this.destinationPublicKey ]) 		  
+		
+		
+		const encryptedMsg = message.set('text', encryptedText).set('derivedKey', EncryptedKey).set('IV', EncryptedIV).set('hashValue', EncryptedHash).set('Sign', {EncryptedSignText, EncryptedSignHash,EncryptedSignKey,EncryptedSignIV})
 		console.log(encryptedMsg.toObject())
 		
         // Emit the encrypted message

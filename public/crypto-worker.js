@@ -36,7 +36,7 @@ onmessage = function(e) {
       result = decrypt(text, key , IV)
       break
 	case 'hmac':
-	  result = bytesToStr(hmacSha256(key ,text))
+	  result = hmacSha256(key ,text)
 	  break
 	case 'sign':
 	  result = sign(text)
@@ -125,8 +125,9 @@ function generateIV(){
 }
 
 function sign(content){
-	crypt.setKey(privateKey)
-	return crypt.encrypt(content)
+	content = pad32(Buffer.from(content));
+	var sig = secp256k1.ecdsaSign(content, privateKey).signature;
+	return bytesToStr(secp256k1.signatureExport(sig))
 }
 
 function unsign(content, publicKey){
@@ -181,9 +182,9 @@ function strToBytes(content){
 
 
 function PKIEncrypt(symkey, pubkey){
-	const dSym = strToBytes(symkey)
+	//const dSym = strToBytes(symkey)
 	const dKey = strToBytes(pubkey)
-	const bSym = Buffer.from(dSym)
+	const bSym = Buffer.from(symkey)
 	const bKey = Buffer.from(dKey)
 	
 	//ECIES
@@ -258,5 +259,17 @@ function equalConstTime(b1, b2) {
 function assert(condition, message) {
   if (!condition) {
     throw new Error(message || "Assertion failed");
+  }
+}
+
+function pad32(msg){
+  var buf;
+  if (msg.length < 32) {
+    buf = Buffer.alloc(32);
+    buf.fill(0);
+    msg.copy(buf, 32 - msg.length);
+    return buf;
+  } else {
+    return msg;
   }
 }
