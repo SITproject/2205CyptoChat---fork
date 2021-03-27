@@ -36,7 +36,7 @@ onmessage = function(e) {
       result = decrypt(text, key , IV)
       break
 	case 'hmac':
-	  result = generateHash(text)
+	  result = bytesToStr(hmacSha256(key ,text))
 	  break
 	case 'sign':
 	  result = sign(text)
@@ -48,7 +48,7 @@ onmessage = function(e) {
 	  result = sharedSecret(key)
 	  break  
 	case 'keyDerive':
-	  result = keyDerive()
+	  result = keyDerive(text)
 	  break
 	case 'generateIV':
 	  result = generateIV()
@@ -101,14 +101,23 @@ function decrypt (content, derivedKey, IV) {
 
 //----------------------------------untested---------------
 //HKDF
-function keyDerive(){
-	const ikm = ss;
-	const length = 32;
-	const salt = crypto.randomBytes(32);
-	const info = '';
-	const hash = 'SHA-256';
-	const extract = hkdf.extract('ripemd160', 32, ikm, salt);
-	return(hkdf.expand('SHA256', 256, extract, 32, info)); // run only step #2
+function keyDerive(content){
+	if(content == "encryption"){
+		const ikm = ss.slice(0,16);		
+		const length = 32;
+		const salt = crypto.randomBytes(32);
+		const info = '';
+		const hash = 'SHA-256';
+		const extract = hkdf.extract('ripemd160', 32, ikm, salt);
+		return(hkdf.expand('SHA256', 256, extract, 32, info));
+	}else{
+		const ikm = ss.slice(16,32);
+		const length = 32;
+		const info = '';
+		const hash = 'SHA-256';
+		const extract = hkdf.extract('ripemd160', 32, ikm);
+		return(hkdf.expand('SHA256', 256, extract, 32, info));
+	}
 }
 
 function generateIV(){
@@ -128,11 +137,6 @@ function sign(content){
 function unsign(content, publicKey){
 	crypt.setKey(publicKey)
 	return crypt.decrypt(content)
-}
-
-function generateHash(content){
-  var hash = CryptoJS.SHA256(content);
-  return hash.toString();
 }
 
 function sharedSecret(key){
@@ -192,14 +196,12 @@ function PKIEncrypt(symkey, pubkey){
 	const ephemPrivateKey = eccrypto.generatePrivate() || crypto.randomBytes(32);
 	const ephemPublicKey = eccrypto.getPublic(ephemPrivateKey);
 	const ephemSS = secp256k1.ecdh(bKey, ephemPrivateKey)
-	console.log(ephemSS)
 	const hash = sha512(ephemSS);
 	const iv = crypto.randomBytes(16);
 	const encryptionKey = hash.slice(0, 32);
 	const macKey = hash.slice(32);
 	const ciphertext = aes256CbcEncrypt(iv, encryptionKey, bSym);
 	const dataToMac = Buffer.concat([iv, ephemPublicKey, ciphertext]);
-	console.log(ephemPublicKey)
 	const mac = Buffer.from(hmacSha256(macKey, dataToMac));
 	return {
       iv: bytesToStr(iv),
@@ -221,7 +223,6 @@ function PKIDecrypt(encrypted){
 	  Buffer.from(strToBytes(encrypted.ciphertext))
     ]);
 	const realMac = hmacSha256(macKey, dataToMac);
-
 	assert(equalConstTime(Buffer.from(strToBytes(encrypted.mac)), realMac), "Bad MAC");
 	return aes256CbcDecrypt(Buffer.from(strToBytes(encrypted.iv)), encryptionKey, Buffer.from(strToBytes(encrypted.ciphertext)));
 }
