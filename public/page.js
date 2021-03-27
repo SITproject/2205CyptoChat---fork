@@ -7,7 +7,6 @@ const vm = new Vue ({
       socket: null,
       originPublicKey: null,
       destinationPublicKey: null,
-	  sharedSecret: null,
       messages: [],
       notifications: [],
       currentRoom: null,
@@ -50,10 +49,11 @@ const vm = new Vue ({
 		  //Decrypt Key and IV with ECC
 		  console.log(message)
 		  const symmetricKey = await this.getWebWorkerResponse('PKIDecrypt', [message.derivedKey])
-		  const IV = await this.getWebWorkerResponse('PKIDecrypt', [message.IV])
+		  const decryptedIV = await this.getWebWorkerResponse('PKIDecrypt', [message.IV])
+		  const decryptedHash = await this.getWebWorkerResponse('PKIDecrypt', [message.hashValue])
 
 		  // Decrypt the message text in the webworker thread
-		  message.text = await this.getWebWorkerResponse('decrypt', [message.text, symmetricKey, IV])
+		  message.text = await this.getWebWorkerResponse('decrypt', [message.text, symmetricKey, decryptedIV])
 		  //this.messages.push(message)
 
 		  //get 32 bytes key for hashing
@@ -155,7 +155,8 @@ const vm = new Vue ({
           'bytesToStr', [ derivedKey ])
 		const hexIV = await this.getWebWorkerResponse(
           'bytesToStr', [ IV ])  
-		
+		const hexHash = await this.getWebWorkerResponse(
+          'bytesToStr', [ hash ])  
 		
 		
         // Encrypt message with the public key of the other user
@@ -166,15 +167,13 @@ const vm = new Vue ({
         const EncryptedKey = await this.getWebWorkerResponse(
           'PKIEncrypt', [ hexKeys, this.destinationPublicKey ])	
         const EncryptedIV = await this.getWebWorkerResponse(
-          'PKIEncrypt', [ hexIV, this.destinationPublicKey ])			  
+          'PKIEncrypt', [ hexIV, this.destinationPublicKey ])	
+		const EncryptedHash = await this.getWebWorkerResponse(
+          'PKIEncrypt', [ hexHash, this.destinationPublicKey ])		  
 		
-		const encryptedMsg = message.set('text', encryptedText).set('derivedKey', EncryptedKey).set('IV', EncryptedIV).set('hashValue', hash)
+		const encryptedMsg = message.set('text', encryptedText).set('derivedKey', EncryptedKey).set('IV', EncryptedIV).set('hashValue', EncryptedHash)
 		console.log(encryptedMsg.toObject())
-		//Hash the message
-		//const hash = await this.getWebWorkerResponse('hmac', [message.get('text')])
 		
-        //const encryptedMsg = message.set('text', encryptedText).set('hashValue', hash)
-
         // Emit the encrypted message
         this.socket.emit('MESSAGE', encryptedMsg.toObject())
       }

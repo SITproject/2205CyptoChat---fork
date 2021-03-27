@@ -124,11 +124,6 @@ function generateIV(){
 	return crypto.randomBytes(16)
 }
 
-function signingdata(text){
-  const hash = createHash('sha256',privateKey).update(text).digest('hex')
-  return hash
-}
-
 function sign(content){
 	crypt.setKey(privateKey)
 	return crypt.encrypt(content)
@@ -226,8 +221,6 @@ function PKIDecrypt(encrypted){
 	assert(equalConstTime(Buffer.from(strToBytes(encrypted.mac)), realMac), "Bad MAC");
 	return aes256CbcDecrypt(Buffer.from(strToBytes(encrypted.iv)), encryptionKey, Buffer.from(strToBytes(encrypted.ciphertext)));
 }
-
-
 
 function sha512(msg) {
   return crypto.createHash("sha512").update(msg).digest();
