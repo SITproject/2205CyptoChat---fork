@@ -99,7 +99,6 @@ function decrypt (content, derivedKey, IV) {
   return decryptedText
 }
 
-//----------------------------------untested---------------
 //HKDF
 function keyDerive(content){
 	if(content == "encryption"){
@@ -175,7 +174,6 @@ function Export(){
     console.log('Saved!');
   });
 }
-//----------------------------------untested---------------
 
 function bytesToStr(content){
 	return aesjs.utils.hex.fromBytes(content);
