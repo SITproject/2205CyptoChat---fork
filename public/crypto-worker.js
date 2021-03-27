@@ -41,8 +41,8 @@ onmessage = function(e) {
 	case 'sign':
 	  result = sign(text)
 	  break
-	case 'unsign':
-	  result = unsign(text)
+	case 'verifySign':
+	  result = verifySign(text, key, IV)
 	  break
 	case 'sharedSecret':
 	  result = sharedSecret(key)
@@ -127,12 +127,17 @@ function generateIV(){
 function sign(content){
 	content = pad32(Buffer.from(content));
 	var sig = secp256k1.ecdsaSign(content, privateKey).signature;
-	return bytesToStr(secp256k1.signatureExport(sig))
+	return secp256k1.signatureExport(sig)
 }
 
-function unsign(content, publicKey){
-	crypt.setKey(publicKey)
-	return crypt.decrypt(content)
+function verifySign(msg, publicKey, sig){
+	msg = pad32(Buffer.from(msg));
+	sig = secp256k1.signatureImport(sig);
+	if (secp256k1.ecdsaVerify(sig, msg, Buffer.from(strToBytes(publicKey)))){
+		return 1
+	}else{
+		return 0
+	}
 }
 
 function sharedSecret(key){

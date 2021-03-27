@@ -51,35 +51,44 @@ const vm = new Vue ({
 		  const symmetricKey = await this.getWebWorkerResponse('PKIDecrypt', [message.derivedKey])
 		  const decryptedIV = await this.getWebWorkerResponse('PKIDecrypt', [message.IV])
 		  const decryptedHash = await this.getWebWorkerResponse('PKIDecrypt', [message.hashValue])
+
 		  
 		  //Decrypt Signatures
-		  const decryptedSignText = await this.getWebWorkerResponse('PKIDecrypt', [message.Sign.EncryptedSignHash])
+		  const decryptedSignText = await this.getWebWorkerResponse('PKIDecrypt', [message.Sign.EncryptedSignText])
 		  const decryptedSignHash = await this.getWebWorkerResponse('PKIDecrypt', [message.Sign.EncryptedSignHash])
-		  const decryptedSignIV = await this.getWebWorkerResponse('PKIDecrypt', [message.Sign.EncryptedSignHash])
-		  const decryptedSignKey = await this.getWebWorkerResponse('PKIDecrypt', [message.Sign.EncryptedSignHash])
+		  const decryptedSignIV = await this.getWebWorkerResponse('PKIDecrypt', [message.Sign.EncryptedSignIV])
+		  const decryptedSignKey = await this.getWebWorkerResponse('PKIDecrypt', [message.Sign.EncryptedSignKey])
 		  
-		  //Hash String
-		  const hashString = await this.getWebWorkerResponse(
-            'bytesToStr', [ decryptedHash ])  
 
-		  // Decrypt the message text in the webworker thread
-		  message.text = await this.getWebWorkerResponse('decrypt', [message.text, symmetricKey, decryptedIV])
-		  //this.messages.push(message)
+
+		  //verify Signature
+		  const verifyHash = await this.getWebWorkerResponse('verifySign', [decryptedHash, this.destinationPublicKey, decryptedSignHash])
+		  const verifyIV = await this.getWebWorkerResponse('verifySign', [decryptedIV, this.destinationPublicKey, decryptedSignIV])
+		  const verifyKey = await this.getWebWorkerResponse('verifySign', [symmetricKey, this.destinationPublicKey, decryptedSignKey])
+		
+		//Verify if the Hash, IV and KEY is sent by who it claims to be
+		if (verifyHash == 1 && verifyKey == 1 && verifyIV == 1){
+			// Decrypt the message text in the webworker thread
+			message.text = await this.getWebWorkerResponse('decrypt', [message.text, symmetricKey, decryptedIV])
+			const verifyText = await this.getWebWorkerResponse('verifySign', [message.text, this.destinationPublicKey, decryptedSignText])
+			  /*Hash*/
+			//Hash String of decryptedHash
+			const hashString = await this.getWebWorkerResponse(
+			  'bytesToStr', [ decryptedHash ])
+			//get 32 bytes key for hashing
+			const hashKey = await this.getWebWorkerResponse(
+			  'keyDerive', [ "hashKey" ])			
+			//calculate Hash of message
+			const hash = await this.getWebWorkerResponse('hmac', [hashKey, message.text])
+			const hashed = await this.getWebWorkerResponse('bytesToStr', [hash])
+			//check if the message had been modified and the message is sent by who it is deem to be
+			if(hashed == hashString && verifyText == 1){
+				this.messages.push(message)
+			}else{
+				this.addNotification(`Message had been deleted. Previous message seems to be modified, please establish a new session.`)
+			}
 			
-		  //get 32 bytes key for hashing
-		  const hashKey = await this.getWebWorkerResponse(
-			'keyDerive', [ "hashKey" ])
-		  
-		  //calculate Hash of message
-		  const hash = await this.getWebWorkerResponse('hmac', [hashKey, message.text])
-		  const hashed = await this.getWebWorkerResponse('bytesToStr', [hash])
-		  
-		  if(hashed == hashString){
-		    this.messages.push(message)
-		  }
-		  else{
-		    this.addNotification(`Message could be modified, Hash value ${message.hashValue} seems to be different`)
-		  }
+		}
         }
       })
 
@@ -168,6 +177,7 @@ const vm = new Vue ({
 		//Signature
 		const SignText = await this.getWebWorkerResponse(
           'sign', [ message.get('text')])
+		console.log(SignText)
 		const SignHash = await this.getWebWorkerResponse(
           'sign', [ hash ])
 		const SignKey = await this.getWebWorkerResponse(
