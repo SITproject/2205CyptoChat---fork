@@ -6,16 +6,20 @@ self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.0.0/crypt
 self.importScripts('crypto.js')
 self.importScripts('futoin-hkdf.js')
 self.importScripts('aes-js.js')
-
+self.importScripts('eccrypto.js')
+self.importScripts('secp256k1.js')
+self.importScripts('buffer.js')
 
 let crypt = null
 let privateKey = null
 let ss = null
+
 const crypto = require('crypto')
+const eccrypto = require('eccrypto')
 const hkdf = require('futoin-hkdf')
-const aesjs = require('aes-js');
-
-
+const aesjs = require('aes-js')
+const secp256k1 = require('secp256k1')
+const Buffer = require('buffer').Buffer
 
 /** Webworker onmessage listener */
 onmessage = function(e) {
@@ -55,6 +59,12 @@ onmessage = function(e) {
 	case 'strToBytes':
 	  result = strToBytes(text)
 	  break  
+	case 'PKIEncrypt':
+	  result = PKIEncrypt(text,key)
+	  break
+	case 'PKIDecrypt':
+	  result = PKIDecrypt(text)
+	  break
   }
 
   // Return result to the UI thread
@@ -63,15 +73,10 @@ onmessage = function(e) {
 
 /** Generate and store keypair */
 function generateKeypair () {
-  crypt = crypto.createECDH('secp256k1');
-  crypt.generateKeys()
+  privateKey = eccrypto.generatePrivate();
   //console.log(user.getPrivateKey().toString("base64"))
-  return crypt.getPublicKey().toString("base64")
+  return bytesToStr(eccrypto.getPublic(privateKey))
   
-  //crypt = new JSEncrypt({default_key_size: 2056})
-  //privateKey = crypt.getPrivateKey()
-  // Only return the public key, keep the private key hidden
-  //return crypt.getPublicKey()
 }
 
 /** Encrypt the provided string with the destination public key */
@@ -137,8 +142,9 @@ function generateHash(content){
 }
 
 function sharedSecret(key){
-	ss = crypt.computeSecret(key, 'base64', 'hex');
-	return ss;
+	const dKey = strToBytes(key)
+	const bKey = Buffer.from(dKey)
+	ss = secp256k1.ecdh(bKey, privateKey)
 }
 
 
@@ -178,4 +184,55 @@ function bytesToStr(content){
 
 function strToBytes(content){
 	return aesjs.utils.hex.toBytes(content);
+}
+
+
+function PKIEncrypt(symkey, pubkey){
+	const dSym = strToBytes(symkey)
+	const dKey = strToBytes(pubkey)
+	const bSym = Buffer.from(dSym)
+	const bKey = Buffer.from(dKey)
+	
+	//ECIES
+	//generate ephemepharal private key
+	var ephemPrivateKey = eccrypto.generatePrivate() || crypto.randomBytes(32);
+	var ephemPublicKey = eccrypto.getPublic(ephemPrivateKey);
+	var ephemSS = secp256k1.ecdh(bKey, ephemPrivateKey)
+	
+	
+	var hash = sha512(ephemSS);
+	var iv = crypto.randomBytes(16);
+	var encryptionKey = hash.slice(0, 32);
+	var macKey = hash.slice(32);
+	var ciphertext = aes256CbcEncrypt(iv, encryptionKey, bSym);
+	var dataToMac = Buffer.concat([iv, ephemPublicKey, ciphertext]);
+	var mac = Buffer.from(hmacSha256(macKey, dataToMac));
+	return {
+      iv: iv,
+      ephemPublicKey: ephemPublicKey,
+      ciphertext: ciphertext,
+      mac: mac,
+    };
+}
+
+function PKIDecrypt(encrypted){
+	var ephemSS = secp256k1.ecdh(encrypted.ephemPublicKey, privateKey)
+
+}
+
+
+
+function sha512(msg) {
+  return crypto.createHash("sha512").update(msg).digest();
+}
+
+function aes256CbcEncrypt(iv, key, plaintext) {
+  var cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
+  var firstChunk = cipher.update(plaintext);
+  var secondChunk = cipher.final();
+  return Buffer.concat([firstChunk, secondChunk]);
+}
+
+function hmacSha256(key, msg) {
+  return crypto.createHmac("sha256", key).update(msg).digest();
 }

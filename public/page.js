@@ -83,8 +83,7 @@ const vm = new Vue ({
         this.addNotification(`Public Key Received - ${key}`)
         this.destinationPublicKey = key
 		//generate shared secret
-		this.SharedSecret = await this.getWebWorkerResponse('sharedSecret', [null, this.destinationPublicKey])
-		console.log(this.SharedSecret)
+		await this.getWebWorkerResponse('sharedSecret', [null, this.destinationPublicKey])
       })
 
       // Clear destination public key if other user leaves room
@@ -136,7 +135,7 @@ const vm = new Vue ({
 		//get 16 bytes IV for encryption
 		const IV = await this.getWebWorkerResponse(
           'generateIV', [ null, null ])		
-		console.log(derivedKey)
+
 		const hexKeys = await this.getWebWorkerResponse(
           'bytesToStr', [ derivedKey ])
 		const hexIV = await this.getWebWorkerResponse(
@@ -145,7 +144,14 @@ const vm = new Vue ({
         // Encrypt message with the public key of the other user
         const encryptedText = await this.getWebWorkerResponse(
           'encrypt', [ message.get('text'), derivedKey, IV ])
-
+		  
+		//Encrypt Key and IV with PKI
+        const EncryptedKey = await this.getWebWorkerResponse(
+          'PKIEncrypt', [ hexKeys, this.originPublicKey ])		
+		console.log(EncryptedKey)
+		
+		
+		
 		
 		const encryptedMsg = message.set('text', encryptedText).set('derivedKey', hexKeys).set('IV', hexIV)
 		console.log(encryptedMsg.toObject())
