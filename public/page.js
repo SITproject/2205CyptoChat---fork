@@ -52,18 +52,22 @@ const vm = new Vue ({
 		  const decryptedIV = await this.getWebWorkerResponse('PKIDecrypt', [message.IV])
 		  const decryptedHash = await this.getWebWorkerResponse('PKIDecrypt', [message.hashValue])
 
+		  //Hash String
+		  const hashString = await this.getWebWorkerResponse(
+            'bytesToStr', [ decryptedHash ])  
+
 		  // Decrypt the message text in the webworker thread
 		  message.text = await this.getWebWorkerResponse('decrypt', [message.text, symmetricKey, decryptedIV])
 		  //this.messages.push(message)
-
+			
 		  //get 32 bytes key for hashing
 		  const hashKey = await this.getWebWorkerResponse(
 			'keyDerive', [ "hashKey" ])
 		  
 		  //calculate Hash of message
 		  const hash = await this.getWebWorkerResponse('hmac', [hashKey, message.text])
-		  
-		  if(hash == message.hashValue){
+
+		  if(hash == hashString){
 		    this.messages.push(message)
 		  }
 		  else{
@@ -154,9 +158,7 @@ const vm = new Vue ({
 		const hexKeys = await this.getWebWorkerResponse(
           'bytesToStr', [ derivedKey ])
 		const hexIV = await this.getWebWorkerResponse(
-          'bytesToStr', [ IV ])  
-		const hexHash = await this.getWebWorkerResponse(
-          'bytesToStr', [ hash ])  
+          'bytesToStr', [ IV ])   
 		
 		
         // Encrypt message with the public key of the other user
@@ -169,7 +171,7 @@ const vm = new Vue ({
         const EncryptedIV = await this.getWebWorkerResponse(
           'PKIEncrypt', [ hexIV, this.destinationPublicKey ])	
 		const EncryptedHash = await this.getWebWorkerResponse(
-          'PKIEncrypt', [ hexHash, this.destinationPublicKey ])		  
+          'PKIEncrypt', [ hash, this.destinationPublicKey ])		  
 		
 		const encryptedMsg = message.set('text', encryptedText).set('derivedKey', EncryptedKey).set('IV', EncryptedIV).set('hashValue', EncryptedHash)
 		console.log(encryptedMsg.toObject())
