@@ -47,12 +47,13 @@ const vm = new Vue ({
         // Only decrypt messages that were encrypted with the user's public key
 
         if (message.recipient === this.originPublicKey) {
-		  //Parse key and IV buffer
-		  const keys = await this.getWebWorkerResponse('strToBytes', message.derivedKey)
-		  const IV = await this.getWebWorkerResponse('strToBytes', message.IV)
+		  //Decrypt Key and IV with ECC
+		  console.log(message)
+		  const symmetricKey = await this.getWebWorkerResponse('PKIDecrypt', [message.derivedKey])
+		  const IV = await this.getWebWorkerResponse('PKIDecrypt', [message.IV])
 
 		  // Decrypt the message text in the webworker thread
-		  message.text = await this.getWebWorkerResponse('decrypt', [message.text, keys, IV])
+		  message.text = await this.getWebWorkerResponse('decrypt', [message.text, symmetricKey, IV])
 		  this.messages.push(message)
 		  
 		  //const hash = await this.getWebWorkerResponse('hmac', message.text)
@@ -147,13 +148,11 @@ const vm = new Vue ({
 		  
 		//Encrypt Key and IV with PKI
         const EncryptedKey = await this.getWebWorkerResponse(
-          'PKIEncrypt', [ hexKeys, this.originPublicKey ])		
-		console.log(EncryptedKey)
+          'PKIEncrypt', [ hexKeys, this.destinationPublicKey ])	
+        const EncryptedIV = await this.getWebWorkerResponse(
+          'PKIEncrypt', [ hexIV, this.destinationPublicKey ])			  
 		
-		
-		
-		
-		const encryptedMsg = message.set('text', encryptedText).set('derivedKey', hexKeys).set('IV', hexIV)
+		const encryptedMsg = message.set('text', encryptedText).set('derivedKey', EncryptedKey).set('IV', EncryptedIV)
 		console.log(encryptedMsg.toObject())
 		//Hash the message
 		//const hash = await this.getWebWorkerResponse('hmac', [message.get('text')])

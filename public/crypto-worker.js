@@ -82,10 +82,6 @@ function generateKeypair () {
 /** Encrypt the provided string with the destination public key */
 function encrypt (content, derivedKey, IV) {
   // Convert text to bytes
-  //var key = [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 ];
-
-// The initialization vector (must be 16 bytes)
-  //var iv = [ 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34,35, 36 ];
   var textBytes = aesjs.utils.utf8.toBytes(content);
   var aesOfb = new aesjs.ModeOfOperation.ofb(derivedKey, IV);
   var encryptedBytes = aesOfb.encrypt(textBytes);
@@ -111,8 +107,6 @@ function keyDerive(){
 	const salt = crypto.randomBytes(32);
 	const info = '';
 	const hash = 'SHA-256';
-	//console.log(hkdf.extract('ripemd160', 128, ikm, salt)); 
-	//return hkdf(ikm, length, salt, info, hash);
 	const extract = hkdf.extract('ripemd160', 32, ikm, salt);
 	return(hkdf.expand('SHA256', 256, extract, 32, info)); // run only step #2
 }
@@ -195,29 +189,41 @@ function PKIEncrypt(symkey, pubkey){
 	
 	//ECIES
 	//generate ephemepharal private key
-	var ephemPrivateKey = eccrypto.generatePrivate() || crypto.randomBytes(32);
-	var ephemPublicKey = eccrypto.getPublic(ephemPrivateKey);
-	var ephemSS = secp256k1.ecdh(bKey, ephemPrivateKey)
-	
-	
-	var hash = sha512(ephemSS);
-	var iv = crypto.randomBytes(16);
-	var encryptionKey = hash.slice(0, 32);
-	var macKey = hash.slice(32);
-	var ciphertext = aes256CbcEncrypt(iv, encryptionKey, bSym);
-	var dataToMac = Buffer.concat([iv, ephemPublicKey, ciphertext]);
-	var mac = Buffer.from(hmacSha256(macKey, dataToMac));
+	const ephemPrivateKey = eccrypto.generatePrivate() || crypto.randomBytes(32);
+	const ephemPublicKey = eccrypto.getPublic(ephemPrivateKey);
+	const ephemSS = secp256k1.ecdh(bKey, ephemPrivateKey)
+	console.log(ephemSS)
+	const hash = sha512(ephemSS);
+	const iv = crypto.randomBytes(16);
+	const encryptionKey = hash.slice(0, 32);
+	const macKey = hash.slice(32);
+	const ciphertext = aes256CbcEncrypt(iv, encryptionKey, bSym);
+	const dataToMac = Buffer.concat([iv, ephemPublicKey, ciphertext]);
+	console.log(ephemPublicKey)
+	const mac = Buffer.from(hmacSha256(macKey, dataToMac));
 	return {
-      iv: iv,
-      ephemPublicKey: ephemPublicKey,
-      ciphertext: ciphertext,
-      mac: mac,
+      iv: bytesToStr(iv),
+      ephemPublicKey: bytesToStr(ephemPublicKey),
+      ciphertext: bytesToStr(ciphertext),
+      mac: bytesToStr(mac),
     };
 }
 
+//Decrypt using Public Private ECC ephemepheral keys
 function PKIDecrypt(encrypted){
-	var ephemSS = secp256k1.ecdh(encrypted.ephemPublicKey, privateKey)
+	const ephemSS = secp256k1.ecdh(Buffer.from(strToBytes(encrypted.ephemPublicKey)), privateKey)
+	const hash = sha512(ephemSS);
+	const encryptionKey = hash.slice(0, 32);
+	const macKey = hash.slice(32);
+	const dataToMac = Buffer.concat([
+      Buffer.from(strToBytes(encrypted.iv)),
+      Buffer.from(strToBytes(encrypted.ephemPublicKey)),
+	  Buffer.from(strToBytes(encrypted.ciphertext))
+    ]);
+	const realMac = hmacSha256(macKey, dataToMac);
 
+	assert(equalConstTime(Buffer.from(strToBytes(encrypted.mac)), realMac), "Bad MAC");
+	return aes256CbcDecrypt(Buffer.from(strToBytes(encrypted.iv)), encryptionKey, Buffer.from(strToBytes(encrypted.ciphertext)));
 }
 
 
@@ -233,6 +239,30 @@ function aes256CbcEncrypt(iv, key, plaintext) {
   return Buffer.concat([firstChunk, secondChunk]);
 }
 
+function aes256CbcDecrypt(iv, key, ciphertext) {
+  var cipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
+  var firstChunk = cipher.update(ciphertext);
+  var secondChunk = cipher.final();
+  return Buffer.concat([firstChunk, secondChunk]);
+}
+
 function hmacSha256(key, msg) {
   return crypto.createHmac("sha256", key).update(msg).digest();
+}
+
+function equalConstTime(b1, b2) {
+  if (b1.length !== b2.length) {
+    return false;
+  }
+  var res = 0;
+  for (var i = 0; i < b1.length; i++) {
+    res |= b1[i] ^ b2[i];  // jshint ignore:line
+  }
+  return res === 0;
+}
+
+function assert(condition, message) {
+  if (!condition) {
+    throw new Error(message || "Assertion failed");
+  }
 }
