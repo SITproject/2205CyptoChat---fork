@@ -67,9 +67,10 @@ const vm = new Vue ({
 		  const verifyHash = await this.getWebWorkerResponse('verifySign', [decryptedHash, this.destinationPublicKey, decryptedSignHash])
 		  const verifyIV = await this.getWebWorkerResponse('verifySign', [decryptedIV, this.destinationPublicKey, decryptedSignIV])
 		  const verifyKey = await this.getWebWorkerResponse('verifySign', [symmetricKey, this.destinationPublicKey, decryptedSignKey])
+		  const verifyText = await this.getWebWorkerResponse('verifySign', [message.text, this.destinationPublicKey, decryptedSignText])
 		
 		//Verify if the Hash, IV and KEY is sent by who it claims to be
-		if (verifyHash == 1 && verifyKey == 1 && verifyIV == 1){
+		if (verifyHash == 1 && verifyKey == 1 && verifyIV == 1 && verifyText == 1){
 			//get 32 bytes key for hashing				
 			const hashKey = await this.getWebWorkerResponse(
 			  'keyDerive', [ "hashKey" ])
@@ -80,16 +81,9 @@ const vm = new Vue ({
 			const hashString = await this.getWebWorkerResponse(
 			  'bytesToStr', [ decryptedHash ])			
 			if(hashed == hashString){			
-				//check if the message had been modified and the message is sent by who it is deem to be
-				const verifyText = await this.getWebWorkerResponse('verifySign', [message.text, this.destinationPublicKey, decryptedSignText])
-				if(verifyText == 1){
 					// Decrypt the message text in the webworker thread
 					message.text = await this.getWebWorkerResponse('decrypt', [message.text, symmetricKey, decryptedIV])
 					this.messages.push(message)
-				}	
-				else{
-					this.addNotification(`Message had been deleted. Previous message seems to be modified, please establish a new session.`)
-				}
 			}else{
 				this.addNotification(`Message had been deleted. Previous message seems to be modified, please establish a new session.`)
 			}
