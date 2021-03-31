@@ -80,11 +80,11 @@ const vm = new Vue ({
 			const hashString = await this.getWebWorkerResponse(
 			  'bytesToStr', [ decryptedHash ])			
 			if(hashed == hashString){			
-				// Decrypt the message text in the webworker thread
-				message.text = await this.getWebWorkerResponse('decrypt', [message.text, symmetricKey, decryptedIV])
 				//check if the message had been modified and the message is sent by who it is deem to be
 				const verifyText = await this.getWebWorkerResponse('verifySign', [message.text, this.destinationPublicKey, decryptedSignText])
 				if(verifyText == 1){
+					// Decrypt the message text in the webworker thread
+					message.text = await this.getWebWorkerResponse('decrypt', [message.text, symmetricKey, decryptedIV])
 					this.messages.push(message)
 				}	
 				else{
@@ -185,7 +185,7 @@ const vm = new Vue ({
 		
 		//Signature
 		const SignText = await this.getWebWorkerResponse(
-          'sign', [ message.get('text')])
+          'sign', [ encryptedText])
 		const SignHash = await this.getWebWorkerResponse(
           'sign', [ hash ])
 		const SignKey = await this.getWebWorkerResponse(
