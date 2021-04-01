@@ -45,11 +45,8 @@ const vm = new Vue ({
       // Decrypt and display message when received
       this.socket.on('MESSAGE', async (message) => {
 
-        // Only decrypt messages that were encrypted with the user's public key
-
-        if (message.recipient === this.originPublicKey) {
+        if (message.id === this.getKeySnippet(this.destinationPublicKey)) {
 		  //Decrypt Key and IV with ECC
-		  console.log(message)
 		  const symmetricKey = await this.getWebWorkerResponse('PKIDecrypt', [message.derivedKey])
 		  const decryptedIV = await this.getWebWorkerResponse('PKIDecrypt', [message.IV])
 		  const decryptedHash = await this.getWebWorkerResponse('PKIDecrypt', [message.hashValue])
@@ -75,7 +72,7 @@ const vm = new Vue ({
 			const hashKey = await this.getWebWorkerResponse(
 			  'keyDerive', [ "hashKey" ])
 			//calculate Hash of message
-			const hash = await this.getWebWorkerResponse('hmac', [hashKey, message.text])
+			const hash = await this.getWebWorkerResponse('hmac', [hashKey, message.text + message.id])
 			const hashed = await this.getWebWorkerResponse('bytesToStr', [hash])
 			//Hash String of decryptedHash
 			const hashString = await this.getWebWorkerResponse(
@@ -144,6 +141,7 @@ const vm = new Vue ({
         text: this.draft,
         recipient: this.destinationPublicKey,
         sender: this.originPublicKey,
+		id: this.id,
 		hashValue: null,
 		derivedKey: null,
 		IV: null,
@@ -173,15 +171,16 @@ const vm = new Vue ({
 		// Symmetric AES OFB (ENCRYT-THEN-HASH)
         const encryptedText = await this.getWebWorkerResponse(
           'encrypt', [ message.get('text'), derivedKey, IV ])  
-		const hash = await this.getWebWorkerResponse('hmac', [hashKey, encryptedText])		//Hash the message
-		//convert Bytes to string the keys   
+		const hash = await this.getWebWorkerResponse('hmac', [hashKey, encryptedText + this.id])		//Hash the message H(M || KEY)
+
 		
-		
-		//Signature
+		/* Signature E(SIGN(M || H(M))) */
 		const SignText = await this.getWebWorkerResponse(
           'sign', [ encryptedText])
 		const SignHash = await this.getWebWorkerResponse(
           'sign', [ hash ])
+		  
+		  
 		const SignKey = await this.getWebWorkerResponse(
           'sign', [ derivedKey])
 		const SignIV = await this.getWebWorkerResponse(
@@ -204,9 +203,7 @@ const vm = new Vue ({
 		const EncryptedSignIV = await this.getWebWorkerResponse(
           'PKIEncrypt', [SignIV, this.destinationPublicKey ]) 		  
 		
-		
 		const encryptedMsg = message.set('text', encryptedText).set('derivedKey', EncryptedKey).set('IV', EncryptedIV).set('hashValue', EncryptedHash).set('Sign', {EncryptedSignText, EncryptedSignHash,EncryptedSignKey,EncryptedSignIV})
-		console.log(encryptedMsg.toObject())
 		
         // Emit the encrypted message
         this.socket.emit('MESSAGE', encryptedMsg.toObject())
