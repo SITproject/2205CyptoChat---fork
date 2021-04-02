@@ -12,7 +12,13 @@ const vm = new Vue ({
       notifications: [],
       currentRoom: null,
       pendingRoom: Math.floor(Math.random() * 1000),
-      draft: ''
+      draft: '',
+	  symKey: null,
+	  IV: null,
+	  hashKey: null,
+	  verifySymKey: 0,
+	  verifyIV: 0,
+	  verifyHashKey: 0
     }
   },
   async created () {
@@ -44,49 +50,51 @@ const vm = new Vue ({
 
       // Decrypt and display message when received
       this.socket.on('MESSAGE', async (message) => {
-
-        if (message.id === this.getKeySnippet(this.destinationPublicKey)) {
-		  //Decrypt Key and IV with ECC
-		  const symmetricKey = await this.getWebWorkerResponse('PKIDecrypt', [message.derivedKey])
-		  const decryptedIV = await this.getWebWorkerResponse('PKIDecrypt', [message.IV])
-		  const decryptedHash = await this.getWebWorkerResponse('PKIDecrypt', [message.hashValue])
-
-		  
-		  //Decrypt Signatures
-		  const decryptedSignText = await this.getWebWorkerResponse('PKIDecrypt', [message.Sign.EncryptedSignText])
-		  const decryptedSignHash = await this.getWebWorkerResponse('PKIDecrypt', [message.Sign.EncryptedSignHash])
-		  const decryptedSignIV = await this.getWebWorkerResponse('PKIDecrypt', [message.Sign.EncryptedSignIV])
-		  const decryptedSignKey = await this.getWebWorkerResponse('PKIDecrypt', [message.Sign.EncryptedSignKey])
-		  
-
-
-		  //verify Signature
-		  const verifyHash = await this.getWebWorkerResponse('verifySign', [decryptedHash, this.destinationPublicKey, decryptedSignHash])
-		  const verifyIV = await this.getWebWorkerResponse('verifySign', [decryptedIV, this.destinationPublicKey, decryptedSignIV])
-		  const verifyKey = await this.getWebWorkerResponse('verifySign', [symmetricKey, this.destinationPublicKey, decryptedSignKey])
-		  const verifyText = await this.getWebWorkerResponse('verifySign', [message.text, this.destinationPublicKey, decryptedSignText])
-		
-		//Verify if the Hash, IV and KEY is sent by who it claims to be
-		if (verifyHash == 1 && verifyKey == 1 && verifyIV == 1 && verifyText == 1){
-			//get 32 bytes key for hashing				
-			const hashKey = await this.getWebWorkerResponse(
-			  'keyDerive', [ "hashKey" ])
-			//calculate Hash of message
-			const hash = await this.getWebWorkerResponse('hmac', [hashKey, message.text + message.id])
-			const hashed = await this.getWebWorkerResponse('bytesToStr', [hash])
-			//Hash String of decryptedHash
-			const hashString = await this.getWebWorkerResponse(
-			  'bytesToStr', [ decryptedHash ])			
-			if(hashed == hashString){			
-					// Decrypt the message text in the webworker thread
-					message.text = await this.getWebWorkerResponse('decrypt', [message.text, symmetricKey, decryptedIV])
+		if(message.code == 1){
+			//decrypt keys
+			const decryptedSymKey = await this.getWebWorkerResponse('PKIDecrypt', [message.key.encryptedSymKey])
+			const decryptedIV = await this.getWebWorkerResponse('PKIDecrypt', [message.key.encryptedIV])
+			const decryptedHashKey = await this.getWebWorkerResponse('PKIDecrypt', [message.key.encryptedHashKey])
+			//decrypt signed keys
+			const decryptedSignSymKey = await this.getWebWorkerResponse('PKIDecrypt', [message.signature.encryptedSignSymKey])
+			const decryptedSignIV = await this.getWebWorkerResponse('PKIDecrypt', [message.signature.encryptedSignIV])
+			const decryptedSignHashKey = await this.getWebWorkerResponse('PKIDecrypt', [message.signature.encryptedSignHashKey])
+			//verify signature
+			this.verifySymKey = await this.getWebWorkerResponse('verifySign', [decryptedSymKey, this.destinationPublicKey, decryptedSignSymKey])
+			this.verifyIV = await this.getWebWorkerResponse('verifySign', [decryptedIV, this.destinationPublicKey, decryptedSignIV])
+			this.verifyHashKey = await this.getWebWorkerResponse('verifySign', [decryptedHashKey, this.destinationPublicKey, decryptedSignHashKey])
+			if(this.verifySymKey ==1 && this.verifyIV == 1 && this.verifyHashKey == 1){
+				this.symKey = decryptedSymKey
+				this.IV = decryptedIV
+				this.hashKey = decryptedHashKey
+			}
+		}else if (this.verifySymKey ==1 && this.verifyIV == 1 && this.verifyHashKey == 1 && message.code == 2){
+			//decrypt message and hash
+			const decryptedMessage = await this.getWebWorkerResponse('PKIDecrypt', [message.text.encryptedEncryptedText])
+			const decryptedHash = await this.getWebWorkerResponse('PKIDecrypt', [message.text.encryptedHash])
+			//decrypt signatures
+			const decryptedSignEncryptedText = await this.getWebWorkerResponse('PKIDecrypt', [message.signature.encryptedSignEncryptedText])
+			const decryptedSignHash = await this.getWebWorkerResponse('PKIDecrypt', [message.signature.encryptedSignHash])			
+			//verify signatures
+			const verifyEncryptedText = await this.getWebWorkerResponse('verifySign', [decryptedMessage, this.destinationPublicKey, decryptedSignEncryptedText])
+			const verifyHash = await this.getWebWorkerResponse('verifySign', [decryptedHash, this.destinationPublicKey, decryptedSignHash])	
+			if (verifyEncryptedText && verifyHash){
+				//check for integrity of message (HASH)
+				const producedHash = await this.getWebWorkerResponse('hmac', [this.hashKey, await this.getWebWorkerResponse('bytesToStr', [decryptedMessage])])
+				if(await this.getWebWorkerResponse('bytesToStr', [producedHash]) == await this.getWebWorkerResponse('bytesToStr', [decryptedHash])){
+					//Decrypt the message with symmetric key
+					message.text = await this.getWebWorkerResponse('decrypt', [decryptedMessage, this.symKey, this.IV])
 					this.messages.push(message)
-			}else{
+				}
+			}
+			else{
 				this.addNotification(`Message had been deleted. Previous message seems to be modified, please establish a new session.`)
 			}
-			
+		}else{
+			this.addNotification(`Message had been deleted. Previous message seems to be modified, please establish a new session.`)
 		}
-        }
+		
+     
       })
 
       // When a user joins the current room, send them your public key
@@ -138,15 +146,12 @@ const vm = new Vue ({
 
       // Use immutable.js to avoid unintended side-effects.
       let message = Immutable.Map({
-        text: this.draft,
+		code: 1,
+		text: this.draft,
         recipient: this.destinationPublicKey,
         sender: this.originPublicKey,
-		id: this.id,
-		hashValue: null,
-		derivedKey: null,
-		IV: null,
-		Sign: null
-      })
+      })	  
+	  
 
       // Reset the UI input draft text
       this.draft = ''
@@ -156,7 +161,82 @@ const vm = new Vue ({
 
       if (this.destinationPublicKey) {
 		  
-		  /*Step 1 Generate Keys */
+		for (var i = 0 ; i < 2; i++){
+			var symKey;
+			var IV;
+			var hashKey;
+			var msg;
+			if ( i == 0){
+				msg = message.get('text')
+				message = message.delete("text")
+				/*Send keys first */
+				//get 32 bytes key for encryption
+				symKey = await this.getWebWorkerResponse(
+				  'keyDerive', [ null ])
+				//get 16 bytes IV for encryption
+				IV = await this.getWebWorkerResponse(
+				  'generateIV', [ null ])		
+				//get 32 bytes key for hashing
+				hashKey = await this.getWebWorkerResponse(
+				  'keyDerive', [ null ])	
+				/* Signature */
+				const signSymKey = await this.getWebWorkerResponse(
+				  'sign', [ symKey])
+				const signIV = await this.getWebWorkerResponse(
+				  'sign', [ IV])
+				const signHashKey = await this.getWebWorkerResponse(
+				  'sign', [ hashKey])
+				/* Encrypt*/
+				const encryptedSymKey = await this.getWebWorkerResponse(
+				  'PKIEncrypt', [ symKey, this.destinationPublicKey ])
+				const encryptedIV = await this.getWebWorkerResponse(
+				  'PKIEncrypt', [ IV, this.destinationPublicKey ])
+				const encryptedHashKey = await this.getWebWorkerResponse(
+				  'PKIEncrypt', [ hashKey, this.destinationPublicKey ])		  
+				const encryptedSignSymKey = await this.getWebWorkerResponse(
+				  'PKIEncrypt', [ signSymKey, this.destinationPublicKey ])
+				const encryptedSignIV = await this.getWebWorkerResponse(
+				  'PKIEncrypt', [ signIV, this.destinationPublicKey ])
+				const encryptedSignHashKey = await this.getWebWorkerResponse(
+				  'PKIEncrypt', [ signHashKey, this.destinationPublicKey ])		  
+				
+				const encryptedMsg = message.set('key', {encryptedSymKey,encryptedIV,encryptedHashKey}).set('signature', {encryptedSignSymKey, encryptedSignIV, encryptedSignHashKey})
+				console.log(encryptedMsg.toObject())
+				this.socket.emit('MESSAGE', encryptedMsg.toObject())
+			}else{
+				//Hybrid cryptography 
+				
+				//Encrypted text with AES OFB E(M) || H(E(M))
+				const encryptedText = await this.getWebWorkerResponse(
+				  'encrypt', [ msg, symKey, IV ])
+				const encryptedBytesText = await this.getWebWorkerResponse('strToBytes', [encryptedText])
+				
+				  //HASH OF ENCRYPTED TEXT EtM
+				const hash = await this.getWebWorkerResponse('hmac', [hashKey, encryptedText])
+				
+				//Sign
+				const signEncryptedText = await this.getWebWorkerResponse(
+				  'sign', [ encryptedBytesText ])
+				const signHash = await this.getWebWorkerResponse(
+				  'sign', [ hash ])
+
+				//Encrypt
+				const encryptedEncryptedText = await this.getWebWorkerResponse(
+				  'PKIEncrypt', [ encryptedBytesText, this.destinationPublicKey ])
+				const encryptedHash = await this.getWebWorkerResponse(
+				  'PKIEncrypt', [ hash, this.destinationPublicKey ])
+				const encryptedSignEncryptedText = await this.getWebWorkerResponse(
+				  'PKIEncrypt', [ signEncryptedText, this.destinationPublicKey ])				  
+				const encryptedSignHash = await this.getWebWorkerResponse(
+				  'PKIEncrypt', [ signHash, this.destinationPublicKey ])	
+				  
+				const newMsg = message.set('text', {encryptedEncryptedText, encryptedHash}).set('signature', {encryptedSignEncryptedText, encryptedSignHash}).set('code', 2).set('textt', encryptedText)
+				console.log(newMsg.toObject()) 
+				setTimeout(() => { this.socket.emit('MESSAGE', newMsg.toObject()) }, 500);
+				
+			}
+		}
+		  /*Step 1 Generate Keys 
 		//get 32 bytes key for encryption
 		const derivedKey = await this.getWebWorkerResponse(
           'keyDerive', [ "encryption" ])
@@ -174,7 +254,7 @@ const vm = new Vue ({
 		const hash = await this.getWebWorkerResponse('hmac', [hashKey, encryptedText + this.id])		//Hash the message H(M || KEY)
 
 		
-		/* Signature E(SIGN(M || H(M))) */
+		/* Signature E(SIGN(M || H(M))) 
 		const SignText = await this.getWebWorkerResponse(
           'sign', [ encryptedText])
 		const SignHash = await this.getWebWorkerResponse(
@@ -186,7 +266,7 @@ const vm = new Vue ({
 		const SignIV = await this.getWebWorkerResponse(
           'sign', [ IV ])		  
 		  
-		/*Asymmetric*/
+		/*Asymmetric
         const EncryptedKey = await this.getWebWorkerResponse(
           'PKIEncrypt', [ derivedKey, this.destinationPublicKey ])	
         const EncryptedIV = await this.getWebWorkerResponse(
@@ -206,7 +286,7 @@ const vm = new Vue ({
 		const encryptedMsg = message.set('text', encryptedText).set('derivedKey', EncryptedKey).set('IV', EncryptedIV).set('hashValue', EncryptedHash).set('Sign', {EncryptedSignText, EncryptedSignHash,EncryptedSignKey,EncryptedSignIV})
 		
         // Emit the encrypted message
-        this.socket.emit('MESSAGE', encryptedMsg.toObject())
+        this.socket.emit('MESSAGE', encryptedMsg.toObject())*/
       }
     },
 

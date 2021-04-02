@@ -92,31 +92,22 @@ function encrypt (content, derivedKey, IV) {
 
 /** Decrypt the provided string with the local private key */
 function decrypt (content, derivedKey, IV) {
-  var encryptedBytes = aesjs.utils.hex.toBytes(content);
+  //var encryptedBytes = aesjs.utils.hex.toBytes(content);
   var aesOfb = new aesjs.ModeOfOperation.ofb(derivedKey, IV);
-  var decryptedBytes = aesOfb.decrypt(encryptedBytes);
+  var decryptedBytes = aesOfb.decrypt(content);
   var decryptedText = aesjs.utils.utf8.fromBytes(decryptedBytes);
   return decryptedText
 }
 
 //HKDF
 function keyDerive(content){
-	if(content == "encryption"){
-		const ikm = ss.slice(0,16);		
-		const length = 32;
-		const salt = crypto.randomBytes(32);
-		const info = '';
-		const hash = 'SHA-256';
-		const extract = hkdf.extract('ripemd160', 32, ikm, salt);
-		return(hkdf.expand('SHA256', 256, extract, 32, info));
-	}else{
-		const ikm = ss.slice(16,32);
-		const length = 32;
-		const info = '';
-		const hash = 'SHA-256';
-		const extract = hkdf.extract('ripemd160', 32, ikm);
-		return(hkdf.expand('SHA256', 256, extract, 32, info));
-	}
+	const ikm = ss.slice(0,16);		
+	const length = 32;
+	const salt = crypto.randomBytes(32);
+	const info = '';
+	const hash = 'SHA-256';
+	const extract = hkdf.extract('ripemd160', 32, ikm, salt);
+	return(hkdf.expand('SHA256', 256, extract, 32, info));
 }
 
 function generateIV(){
@@ -146,34 +137,6 @@ function sharedSecret(key){
 }
 
 
-function Import(path){
-  fs = require('fs');
-  fs.readFile(path, 'utf8',  function (err,data){
-    if (err) {
-      return console.log(err);
-    }
-    console.log(data);
-  });
-}
-function Export(){
-  fs = require('fs');
-  fs.appendFile('export.txt', 'private key', function (err) {
-    if (err) throw err;
-    console.log('Saved!');
-  });
-  fs.appendFile('export.txt', privateKey, function (err) {
-    if (err) throw err;
-    console.log('Saved!');
-  });
-  fs.appendFile('export.txt', 'public key', function (err) {
-    if (err) throw err;
-    console.log('Saved!');
-  });
-  fs.appendFile('export.txt', publicKey, function (err) {
-    if (err) throw err;
-    console.log('Saved!');
-  });
-}
 
 function bytesToStr(content){
 	return aesjs.utils.hex.fromBytes(content);
