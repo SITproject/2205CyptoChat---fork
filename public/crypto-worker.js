@@ -65,10 +65,18 @@ onmessage = function(e) {
 	case 'PKIDecrypt':
 	  result = PKIDecrypt(text)
 	  break
+	case 'getID':
+	  result = getID()
+	  break
   }
 
   // Return result to the UI thread
   postMessage([ messageId, result ])
+}
+
+/** GET ID **/
+function getID () {
+	return generateIV().toString('hex')
 }
 
 /** Generate and store keypair */
