@@ -48,7 +48,7 @@ onmessage = function(e) {
 	  result = sharedSecret(key)
 	  break  
 	case 'keyDerive':
-	  result = keyDerive(text)
+	  result = keyDerive(text, key)
 	  break
 	case 'generateIV':
 	  result = generateIV()
@@ -65,8 +65,8 @@ onmessage = function(e) {
 	case 'PKIDecrypt':
 	  result = PKIDecrypt(text)
 	  break
-	case 'getID':
-	  result = getID()
+	case 'generateSalt':
+	  result = generateSalt()
 	  break
   }
 
@@ -74,10 +74,6 @@ onmessage = function(e) {
   postMessage([ messageId, result ])
 }
 
-/** GET ID **/
-function getID () {
-	return generateIV().toString('hex')
-}
 
 /** Generate and store keypair */
 function generateKeypair () {
@@ -108,18 +104,33 @@ function decrypt (content, derivedKey, IV) {
 }
 
 //HKDF
-function keyDerive(content){
-	const ikm = ss.slice(0,16);		
-	const length = 32;
-	const salt = crypto.randomBytes(32);
-	const info = '';
-	const hash = 'SHA-256';
-	const extract = hkdf.extract('ripemd160', 32, ikm, salt);
-	return(hkdf.expand('SHA256', 256, extract, 32, info));
+function keyDerive(content, saltt){
+	if(content == "encryption"){
+		const ikm = ss.slice(0,15);		
+		const length = 32;
+		const salt = saltt;
+		const info = '';
+		const hash = 'SHA-256';
+		const extract = hkdf.extract('ripemd160', 32, ikm, salt);
+		return(hkdf.expand('SHA256', 256, extract, 32, info));
+	}else{
+		const ikm = ss.slice(16,32);		
+		const length = 32;
+		const salt = saltt;
+		const info = '';
+		const hash = 'SHA-256';
+		const extract = hkdf.extract('ripemd160', 32, ikm, salt);
+		return(hkdf.expand('SHA256', 256, extract, 32, info));
+	}
+
 }
 
 function generateIV(){
 	return crypto.randomBytes(16)
+}
+
+function generateSalt(){
+	return crypto.randomBytes(32);
 }
 
 function sign(content){
