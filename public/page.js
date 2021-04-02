@@ -104,7 +104,6 @@ const vm = new Vue ({
       this.socket.on('NEW_CONNECTION', () => {
         this.addNotification('Another user joined the room.')
         this.sendPublicKey()
-		//perform challenge
       })
 
       // Broadcast public key when a new room is joined
