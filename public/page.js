@@ -28,8 +28,8 @@ const vm = new Vue ({
     this.cryptWorker = new Worker('crypto-worker.js')
 
     // Generate keypair and join default room
-    this.originPublicKey = await this.getWebWorkerResponse('generate-keys')
 	this.id = await this.getWebWorkerResponse('getID')
+    this.originPublicKey = await this.getWebWorkerResponse('generate-keys')
     this.addNotification(`Keypair Generated - ${this.getKeySnippet(this.originPublicKey)}`)
 
     // Initialize socketio
@@ -114,7 +114,7 @@ const vm = new Vue ({
       })
 
       // Save public key when received
-      this.socket.on('PUBLIC_KEY', async(key) => {
+      this.socket.on('PUBLIC_KEY', async(key, id) => {
         this.addNotification(`Public Key Received - ${key}`)
         this.destinationPublicKey = key
 		//generate shared secret
@@ -149,7 +149,6 @@ const vm = new Vue ({
 
       // Use immutable.js to avoid unintended side-effects.
       let message = Immutable.Map({
-		code: 1,
 		text: this.draft,
         recipient: this.destinationPublicKey,
         sender: this.originPublicKey,
@@ -201,8 +200,7 @@ const vm = new Vue ({
 				const encryptedSignHashKey = await this.getWebWorkerResponse(
 				  'PKIEncrypt', [ signHashKey, this.destinationPublicKey ])		  
 				
-				const encryptedMsg = message.set('key', {encryptedSymKey,encryptedIV,encryptedHashKey}).set('signature', {encryptedSignSymKey, encryptedSignIV, encryptedSignHashKey})
-				console.log(encryptedMsg.toObject())
+				const encryptedMsg = message.set('key', {encryptedSymKey,encryptedIV,encryptedHashKey}).set('signature', {encryptedSignSymKey, encryptedSignIV, encryptedSignHashKey}).set('code', 1)
 				this.socket.emit('MESSAGE', encryptedMsg.toObject())
 			}else{
 				//Hybrid cryptography 
@@ -231,7 +229,6 @@ const vm = new Vue ({
 				  'PKIEncrypt', [ signHash, this.destinationPublicKey ])					  
 				  
 				const newMsg = message.set('text', {encryptedEncryptedText, encryptedHash}).set('signature', {encryptedSignEncryptedText, encryptedSignHash}).set('code', 2)
-				console.log(newMsg.toObject()) 
 				setTimeout(() => { this.socket.emit('MESSAGE', newMsg.toObject()) }, 500);
 				
 			}
