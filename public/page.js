@@ -15,7 +15,9 @@ const vm = new Vue ({
       draft: '',
 	  symKey: null,
 	  IV: null,
-	  hashKey: null
+	  hashKey: null,
+	  verifySignatureSalt: null,
+	  verifySignatureIV: null
     }
   },
   async created () {
@@ -49,6 +51,13 @@ const vm = new Vue ({
 		if(message.code == 1){
 			const decryptedSALT = await this.getWebWorkerResponse('PKIDecrypt', [message.salt])
 			this.iv = await this.getWebWorkerResponse('PKIDecrypt', [message.iv])
+			const decryptedSignSALT = await this.getWebWorkerResponse('PKIDecrypt', [message.signature.encryptedSignSALT])
+			const decryptedSignIV = await this.getWebWorkerResponse('PKIDecrypt', [message.signature.encryptedSignIV])
+			
+			//verify Signature
+			this.verifySignatureSalt = await this.getWebWorkerResponse('verifySign', [decryptedSALT, this.destinationPublicKey , decryptedSignSALT])
+			this.verifySignatureIV = await this.getWebWorkerResponse('verifySign', [this.iv, this.destinationPublicKey , decryptedSignIV])
+			
 			//Generate symmetric keys to decrypt stuffs
 			//get 32 bytes key for encryption 256 bit keys
 			this.symKey = await this.getWebWorkerResponse(
@@ -56,8 +65,8 @@ const vm = new Vue ({
 			//get 32 bytes key for hashing / 256 bit keys
 			this.hashKey = await this.getWebWorkerResponse(
 			  'keyDerive', [ "hash", decryptedSALT ])
-			  
-		}else if (message.code == 2){
+			
+		}else if (this.verifySignatureSalt == 1 && this.verifySignatureIV == 1 && message.code == 2){
 			//decrypt message and hash
 			const decryptedMessage = await this.getWebWorkerResponse('PKIDecrypt', [message.text])
 			const decryptedSignature = await this.getWebWorkerResponse('PKIDecrypt', [message.signature])
@@ -68,12 +77,12 @@ const vm = new Vue ({
 			if(verifySignature == 1){
 				message.text = await this.getWebWorkerResponse('decrypt', [decryptedMessage, this.symKey, this.iv])
 				this.messages.push(message)
+			}else{
+				this.addNotification(`Message had been deleted. Previous message seems to be modified, please establish a new session.`)
 			}
 		}else{
 			this.addNotification(`Message had been deleted. Previous message seems to be modified, please establish a new session.`)
 		}
-		
-     
       })
 
       // When a user joins the current room, send them your public key
@@ -149,14 +158,25 @@ const vm = new Vue ({
 				  'generateSalt', [ null ])
 				IV = await this.getWebWorkerResponse(
 				  'generateIV', [ null ])	
+				 
+				//Sign
+				const signSALT = await this.getWebWorkerResponse(
+				  'sign', [ SALT ])	
+				const signIV = await this.getWebWorkerResponse(
+				  'sign', [ IV ])	
 				  
 				//Send SALT and IV over to generate  
 				const encryptedSALT = await this.getWebWorkerResponse(
 				  'PKIEncrypt', [ SALT, this.destinationPublicKey ])
 				const encryptedIV = await this.getWebWorkerResponse(
-				  'PKIEncrypt', [ IV, this.destinationPublicKey ])	
+				  'PKIEncrypt', [ IV, this.destinationPublicKey ])
+				const encryptedSignSALT = await this.getWebWorkerResponse(
+				  'PKIEncrypt', [ signSALT, this.destinationPublicKey ])
+				const encryptedSignIV = await this.getWebWorkerResponse(
+				  'PKIEncrypt', [ signIV, this.destinationPublicKey ])
 				  
-				const encryptedMsg = message.set('salt', encryptedSALT).set('iv', encryptedIV).set('code', 1)
+				  
+				const encryptedMsg = message.set('salt', encryptedSALT).set('iv', encryptedIV).set('code', 1).set('signature', {encryptedSignSALT, encryptedSignIV})
 				this.socket.emit('MESSAGE', encryptedMsg.toObject())
 				
 
@@ -185,10 +205,7 @@ const vm = new Vue ({
 				  'PKIEncrypt', [ signHash, this.destinationPublicKey ])  
 				  
 				const newMsg = message.set('text', encryptedMessage).set('signature', encryptedSignHash).set('code', 2)  
-				setTimeout(() => { this.socket.emit('MESSAGE', newMsg.toObject()) }, 500)
-				
-
-				
+				setTimeout(() => { this.socket.emit('8. MESSAGE', newMsg.toObject()) }, 500)
 			}
 		}
       }
