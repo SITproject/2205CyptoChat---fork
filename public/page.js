@@ -65,7 +65,6 @@ const vm = new Vue ({
 			//get 32 bytes key for hashing / 256 bit keys
 			this.hashKey = await this.getWebWorkerResponse(
 			  'keyDerive', [ "hash", decryptedSALT ])
-			
 		}else if (this.verifySignatureSalt == 1 && this.verifySignatureIV == 1 && message.code == 2){
 			//decrypt message and hash
 			const decryptedMessage = await this.getWebWorkerResponse('PKIDecrypt', [message.text])
@@ -205,7 +204,7 @@ const vm = new Vue ({
 				  'PKIEncrypt', [ signHash, this.destinationPublicKey ])  
 				  
 				const newMsg = message.set('text', encryptedMessage).set('signature', encryptedSignHash).set('code', 2)  
-				setTimeout(() => { this.socket.emit('8. MESSAGE', newMsg.toObject()) }, 500)
+				setTimeout(() => { this.socket.emit('MESSAGE', newMsg.toObject()) }, 500)
 			}
 		}
       }
