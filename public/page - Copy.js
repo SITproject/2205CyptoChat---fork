@@ -171,7 +171,10 @@ const vm = new Vue ({
 				const shuffledText = await this.getWebWorkerResponse(
 				  'shuffle', [ msg, symKey ])
  
- 
+				const deshuffle = await this.getWebWorkerResponse(
+				  'DNA_decrypt', [ shuffledText.data, shuffledText.key ])
+				console.log(deshuffle)
+				
 				//Encrypted text with AES OFB E(M) || H(E(M))
 				const encryptedText = await this.getWebWorkerResponse(
 				  'encrypt', [ msg, symKey, IV ])
