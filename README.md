@@ -18,6 +18,8 @@
 3. Paste `https://github.com/HeyAaronHere/2208CyptoChat`
 4. Enter your GitHub credentials & select a location to save the repository
 
+`Online version: https://cryptochatwebapp.azurewebsites.net/`
+
 #### Installing node.js
 1. [Install](https://nodejs.org/en/) node.js
 
