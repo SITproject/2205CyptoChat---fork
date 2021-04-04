@@ -1,4 +1,4 @@
-# 2205CyptoChat
+# CryptoChat
 
 
  ## Table of Contents <!-- omit in toc -->
