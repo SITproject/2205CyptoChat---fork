@@ -68,6 +68,9 @@ onmessage = function(e) {
 	case 'generateSalt':
 	  result = generateSalt()
 	  break
+	case 'sha256':
+	  result = sha256(text)
+	  break
   }
 
   // Return result to the UI thread
@@ -178,7 +181,7 @@ function PKIEncrypt(symkey, pubkey){
 	const ephemPrivateKey = eccrypto.generatePrivate() || crypto.randomBytes(32);
 	const ephemPublicKey = eccrypto.getPublic(ephemPrivateKey);
 	const ephemSS = secp256k1.ecdh(bKey, ephemPrivateKey)
-	const hash = sha512(ephemSS);
+	const hash = sha256(ephemSS);
 	const iv = crypto.randomBytes(16);
 	const encryptionKey = hash.slice(0, 32);
 	const macKey = hash.slice(32);
@@ -196,7 +199,7 @@ function PKIEncrypt(symkey, pubkey){
 //Decrypt using Public Private ECC ephemepheral keys
 function PKIDecrypt(encrypted){
 	const ephemSS = secp256k1.ecdh(Buffer.from(strToBytes(encrypted.ephemPublicKey)), privateKey)
-	const hash = sha512(ephemSS);
+	const hash = sha256(ephemSS);
 	const encryptionKey = hash.slice(0, 32);
 	const macKey = hash.slice(32);
 	const dataToMac = Buffer.concat([
@@ -209,8 +212,8 @@ function PKIDecrypt(encrypted){
 	return aes256CbcDecrypt(Buffer.from(strToBytes(encrypted.iv)), encryptionKey, Buffer.from(strToBytes(encrypted.ciphertext)));
 }
 
-function sha512(msg) {
-  return crypto.createHash("sha512").update(msg).digest();
+function sha256(msg) {
+  return crypto.createHash("sha256").update(msg).digest();
 }
 
 function aes256CbcEncrypt(iv, key, plaintext) {
