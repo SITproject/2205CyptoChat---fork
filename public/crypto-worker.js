@@ -153,6 +153,7 @@ function sharedSecret(key){
 	const dKey = strToBytes(key)
 	const bKey = Buffer.from(dKey)
 	ss = secp256k1.ecdh(bKey, privateKey)
+	return ss
 }
 
 

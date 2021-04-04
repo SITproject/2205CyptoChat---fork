@@ -32,22 +32,28 @@ io.on('connection', (socket) => {
       // Notify room that someone tried to join
       socket.broadcast.to(roomName).emit('INTRUSION_ATTEMPT', null)
     } else {
-      // Leave current room
-      socket.leave(currentRoom)
+	  // Leave current room
+	  socket.leave(currentRoom)
 
-      // Notify room that user has left
-      socket.broadcast.to(currentRoom).emit('USER_DISCONNECTED', null)
+	  // Notify room that user has left
+	  socket.broadcast.to(currentRoom).emit('USER_DISCONNECTED', null)
 
-      // Join new room
-      currentRoom = roomName
-      socket.join(currentRoom)
+	  // Join new room
+	  currentRoom = roomName
+	  socket.join(currentRoom)
 
-      // Notify user of room join success
-      io.to(socket.id).emit('ROOM_JOINED', currentRoom)
+	  // Notify user of room join success
+	  io.to(socket.id).emit('ROOM_JOINED', currentRoom)
 
-      // Notify room that user has joined
-      socket.broadcast.to(currentRoom).emit('NEW_CONNECTION', null)
+	  // Notify room that user has joined
+	  socket.broadcast.to(currentRoom).emit('NEW_CONNECTION', null)
+	  
     }
+  })
+  
+  socket.on('SHARED_SECRET', (ss) => {
+    console.log(`New SS - ${ss}`)
+    socket.broadcast.to(currentRoom).emit('SHARED_SECRET', ss)
   })
 
   /** Broadcast a received message to the room */
@@ -59,7 +65,7 @@ io.on('connection', (socket) => {
   /** Broadcast a new publickey to the room */
   socket.on('PUBLIC_KEY', (key) => {
     socket.broadcast.to(currentRoom).emit('PUBLIC_KEY', key)
-  })
+  }) 
 
   /** Broadcast a disconnection notification to the room */
   socket.on('disconnect', () => {

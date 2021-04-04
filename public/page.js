@@ -17,7 +17,8 @@ const vm = new Vue ({
 	  IV: null,
 	  hashKey: null,
 	  verifySignatureSalt: null,
-	  verifySignatureIV: null
+	  verifySignatureIV: null,
+	  ss: null
     }
   },
   async created () {
@@ -102,8 +103,29 @@ const vm = new Vue ({
         this.addNotification(`Public Key Received - ${key}`)
         this.destinationPublicKey = key
 		//generate shared secret
-		await this.getWebWorkerResponse('sharedSecret', [null, this.destinationPublicKey])
+		this.ss = await this.getWebWorkerResponse('sharedSecret', [null, this.destinationPublicKey])
+		const signSS = await this.getWebWorkerResponse(
+		  'sign', [ this.ss ])	
+		  
+		//Send SALT and IV over to generate  
+		const EncryptedSS = await this.getWebWorkerResponse(
+		  'PKIEncrypt', [ signSS, this.destinationPublicKey ])		
+		this.sendSharedSecret(EncryptedSS)
       })
+	  
+      // Validate Shared Secret when received
+      this.socket.on('SHARED_SECRET', async(ss) => {
+		//decrypt ss
+		const decryptedSS = await this.getWebWorkerResponse('PKIDecrypt', [ss])
+		//verify Shared secret if its the same, decrypt and signature for key confirmation
+		const verifySS = await this.getWebWorkerResponse('verifySign', [this.ss, this.destinationPublicKey , decryptedSS])
+		if(verifySS != 1){
+			this.pendingRoom = Math.floor(Math.random() * 1000)
+			this.addNotification(`Key Confirmation Failed, rejoining new room ${this.pendingRoom} `)
+			// Join a random room as a fallback
+			this.joinRoom()
+		}
+      })	  
 
       // Clear destination public key if other user leaves room
       this.socket.on('user disconnected', () => {
@@ -260,6 +282,13 @@ const vm = new Vue ({
         // Assign the handler to the webworker 'message' event.
         this.cryptWorker.addEventListener('message', handler)
       })
+    },
+	
+	/** Emit the sharedSecret to all users in the chatroom */
+    sendSharedSecret (ss) {
+      if (this.ss) {
+        this.socket.emit('SHARED_SECRET', ss)
+      }
     },
 
     /** Emit the public key to all users in the chatroom */
