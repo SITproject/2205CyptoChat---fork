@@ -104,10 +104,8 @@ const vm = new Vue ({
         this.destinationPublicKey = key
 		//generate shared secret
 		this.ss = await this.getWebWorkerResponse('sharedSecret', [null, this.destinationPublicKey])
-		
 		//Calculate hash and append ID to prevent replay attack, even if MITM, only both user knows the ID and append. So if key confirmation fail, the ID will be change making it harder to bruteforce or MITM
 		const hashSS = await this.getWebWorkerResponse('sha256', [this.ss + this.current])
-		
 		const signSS = await this.getWebWorkerResponse(
 		  'sign', [ hashSS ])	
 		  
@@ -122,10 +120,8 @@ const vm = new Vue ({
       this.socket.on('SHARED_SECRET', async(ss) => {
 		//decrypt ss
 		const decryptedSS = await this.getWebWorkerResponse('PKIDecrypt', [ss])
-		
 		//Calculate shared secret and verify appended with ID
 		const hashSS = await this.getWebWorkerResponse('sha256', [this.ss + this.current])
-		
 		//verify Shared secret if its the same, decrypt and signature for key confirmation
 		const verifySS = await this.getWebWorkerResponse('verifySign', [hashSS, this.destinationPublicKey , decryptedSS])
 		if(verifySS != 1){

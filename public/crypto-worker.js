@@ -86,7 +86,7 @@ function generateKeypair () {
   
 }
 
-/** Encrypt the provided string with the destination public key */
+/** Encrypt the provided string AES-OFB */
 function encrypt (content, derivedKey, IV) {
   // Convert text to bytes
   var textBytes = aesjs.utils.utf8.toBytes(content);
@@ -94,7 +94,6 @@ function encrypt (content, derivedKey, IV) {
   var encryptedBytes = aesOfb.encrypt(textBytes);
   var encryptedHex = aesjs.utils.hex.fromBytes(encryptedBytes);
   return encryptedHex
-  
 }
 
 /** Decrypt the provided string with the local private key */
