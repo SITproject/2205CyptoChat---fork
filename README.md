@@ -17,8 +17,9 @@
 2. Type: 'Clone' and select 'Git: Clone'
 3. Paste `https://github.com/HeyAaronHere/2208CyptoChat`
 4. Enter your GitHub credentials & select a location to save the repository
-
-`Online version: [https://github.com/lusterless/Singapore-Bus-Map-Development/tree/master/Django/map/webmap/data](https://cryptochatwebapp.azurewebsites.net/)`
+```
+Online version: [here](https://osmnx.readthedocs.io/en/stable/)
+```
 
 #### Installing node.js
 1. [Install](https://nodejs.org/en/) node.js
